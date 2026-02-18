@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Home{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero {
+        text-align: center;
+        padding: 4rem 1rem;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: 3rem;
+    }
+
+    .hero-title {
+        font-size: 3.5rem;
+        margin-bottom: 1.5rem;
+        background: linear-gradient(to right, #fff, #94a3b8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .hero-subtitle {
+        color: var(--text-secondary);
+        font-size: 1.25rem;
+        max-width: 600px;
+        margin: 0 auto 2.5rem;
+    }
+
+    .feature-card {
+        background: var(--bg-card);
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        transition: transform 0.2s;
+        text-align: left;
+    }
+
+    .feature-card:hover {
+        transform: translateY(-5px);
+        border-color: var(--accent-blue);
+    }
+
+    .feature-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        color: var(--accent-blue);
+    }
+
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .stat-label {
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1 class="hero-title">Predict Market Volatility<br>with Precision</h1>
+    <p class="hero-subtitle">
+        Advanced ARMA-GARCH-TGARCH modeling for NSE & BSE stocks.
+        Get actionable Buy/Sell signals based on institutional-grade volatility forecasts.
+    </p>
+    <a href="/dashboard" class="btn btn-primary" style="font-size: 1.1rem; padding: 1rem 2rem;">
+        View Live Dashboard
+    </a>
+    <a href="/methodology" class="btn btn-outline" style="font-size: 1.1rem; padding: 1rem 2rem; margin-left: 1rem;">
+        Our Methodology
+    </a>
+</section>
+
+<div class="grid-cols-3" style="margin-bottom: 4rem;">
+    <div class="feature-card">
+        <div class="feature-icon">📈</div>
+        <h3>10-Year Historical Data</h3>
+        <p class="text-secondary">
+            Our models are trained on a decade of daily closing prices to capture long-term market cycles, crashes, and
+            recoveries.
+        </p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Real-time Signals</h3>
+        <p class="text-secondary">
+            Automated backend jobs update every 15 minutes, recalculating volatility metrics to give you the latest
+            "Buy", "Sell", or "Hold" advice.
+        </p>
+    </div>
+    <div class="feature-card">
+        <div class="feature-icon">🛡️</div>
+        <h3>Asymmetric Volatility</h3>
+        <p class="text-secondary">
+            Using TGARCH (GJR-GARCH), we account for the "Leverage Effect"—where bad news impacts volatility more than
+            good news.
+        </p>
+    </div>
+</div>
+
+<div class="card" style="text-align: center; padding: 3rem;">
+    <div class="grid-cols-3">
+        <div>
+            <div class="stat-number">80+</div>
+            <div class="stat-label">Stocks Tracked</div>
+        </div>
+        <div>
+            <div class="stat-number">15m</div>
+            <div class="stat-label">Update Interval</div>
+        </div>
+        <div>
+            <div class="stat-number">95%</div>
+            <div class="stat-label">Model Confidence</div>
+        </div>
+    </div>
+</div>
+{% endblock %}

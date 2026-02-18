@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Methodology{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+    <h1 style="margin-bottom: 2rem;">Our Analytical Approach</h1>
+
+    <div class="card">
+        <h2>1. Data Acquisition</h2>
+        <p class="text-secondary">
+            We fetch daily closing prices from Yahoo Finance API (`yfinance`) for 80 major Indian stocks (BSE SENSEX 30
+            + NSE NIFTY 50).
+            The dataset spans a rolling 10-year window to ensure robustness against various market conditions.
+        </p>
+        <p class="text-secondary">
+            <strong>Log Returns Calculation:</strong><br>
+            <code>r_t = ln(P_t / P_{t-1})</code>
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>2. Mean Equation (ARMA)</h2>
+        <p class="text-secondary">
+            We model the returns series using an <strong>Auto-Regressive Moving Average (ARMA)</strong> model.
+            Based on our initial research (Goal 1), an ARMA(2,3) specification was found to best minimize the AIC for
+            the reference index (SENSEX).
+        </p>
+        <ul>
+            <li class="text-secondary"><strong>AR(2):</strong> Depends on returns of the last 2 days.</li>
+            <li class="text-secondary"><strong>MA(3):</strong> Depends on forecast errors of the last 3 days.</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>3. Volatility Equation (GARCH/TGARCH)</h2>
+        <p class="text-secondary">
+            Financial time series exhibit "volatility clustering"—periods of high risk follow high risk.
+            To capture this, we apply a <strong>Generalized Auto-Regressive Conditional Heteroskedasticity
+                (GARCH)</strong> model to the residuals of the ARMA model.
+        </p>
+
+        <h3>The Leverage Effect (TGARCH)</h3>
+        <p class="text-secondary">
+            Standard GARCH assumes symmetric response to news. However, markets panic more on bad news.
+            We use <strong>Threshold GARCH (TGARCH / GJR-GARCH)</strong> to capture this asymmetry.
+        </p>
+        <p class="text-secondary">
+            If the leverage term (Gamma) is positive and significant, it indicates that negative returns increase future
+            volatility more than positive returns of the same magnitude.
+        </p>
+    </div>
+
+    <div class="card">
+        <h2>4. Signal Generation</h2>
+        <p class="text-secondary">
+            Our investment signals are derived from the forecasted 5-day volatility ($\sigma_{t+5}$):
+        </p>
+        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; margin-top: 1rem;">
+            <p><span class="badge badge-buy">BUY</span> Volatility is falling (>5% drop) or remains extremely low.</p>
+            <p><span class="badge badge-sell">SELL</span> Volatility is spiking (>5% rise) indicating potential
+                instability.</p>
+            <p><span class="badge badge-hold">HOLD</span> Volatility is stable.</p>
+            <p><span class="text-warning" style="font-weight:700;">CAUTION</span> High 'Gamma' detected—stock is highly
+                sensitive to bad news.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

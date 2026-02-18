@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}{{ ticker }} Analysis{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .chart-card {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        height: 600px;
+        position: relative;
+    }
+
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        border-radius: var(--radius-lg);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="detail-header">
+    <div>
+        <h1 style="margin-bottom: 0.5rem;">{{ ticker }}</h1>
+        <p class="text-secondary">Historical Price & Volatility Analysis (10-Year)</p>
+    </div>
+    <a href="/dashboard" class="btn btn-outline" style="display: flex; align-items: center; gap: 8px;">
+        <span>←</span> Back to Dashboard
+    </a>
+</div>
+
+<div class="chart-card">
+    <div id="loading" class="loading-overlay">
+        <div class="text-primary" style="font-size: 1.1rem; font-weight: 500;">
+            Loading detailed analysis data...
+        </div>
+    </div>
+    <canvas id="stockChart"></canvas>
+</div>
+
+<!-- Metrics Cards (Optional Future Enhancement) -->
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const ticker = "{{ ticker }}";
+
+    // Chart.js Default Configuration for Dark Mode
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = '#334155';
+
+    async function fetchStockData() {
+        try {
+            const response = await fetch(`/api/stock/${ticker}`);
+            const data = await response.json();
+
+            if (data.error) {
+                document.getElementById('loading').innerHTML = `<span class="text-danger">Error: ${data.error}</span>`;
+                return;
+            }
+
+            renderChart(data);
+            document.getElementById('loading').style.display = 'none';
+        } catch (e) {
+            console.error(e);
+            document.getElementById('loading').innerHTML = `<span class="text-danger">Failed to connect to API.</span>`;
+        }
+    }
+
+    function renderChart(data) {
+        const ctx = document.getElementById('stockChart').getContext('2d');
+
+        // Gradient for Price Line
+        const gradientPrice = ctx.createLinearGradient(0, 0, 0, 400);
+        gradientPrice.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
+        gradientPrice.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.dates,
+                datasets: [
+                    {
+                        label: 'Normalized Price (LHS)',
+                        data: data.normalized_price,
+                        borderColor: '#38bdf8', // accent-blue
+                        backgroundColor: gradientPrice,
+                        borderWidth: 2,
+                        yAxisID: 'y',
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Volatility (RHS)',
+                        data: data.volatility_history,
+                        borderColor: '#f87171', // danger
+                        backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                        borderWidth: 1.5,
+                        yAxisID: 'y1',
+                        pointRadius: 0,
+                        pointHoverRadius: 0,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        align: 'end',
+                        labels: {
+                            usePointStyle: true,
+                            boxWidth: 8
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                        titleColor: '#f8fafc',
+                        bodyColor: '#cbd5e1',
+                        borderColor: '#334155',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: true
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { maxTicksLimit: 12 }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Normalized Price (Base=100)' },
+                        grid: { borderDash: [4, 4] }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'Conditional Volatility' },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    fetchStockData();
+</script>
+{% endblock %}

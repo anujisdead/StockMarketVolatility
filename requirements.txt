@@ -1,0 +1,10 @@
+yfinance
+pandas
+numpy
+matplotlib
+seaborn
+statsmodels
+arch
+scipy
+flask
+Flask-APScheduler

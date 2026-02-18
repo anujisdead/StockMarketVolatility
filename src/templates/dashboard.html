@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ market }}{% endblock %}
+
+{% block meta_refresh %}
+<meta http-equiv="refresh" content="60">
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .market-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+    }
+
+    .market-selector {
+        background: var(--bg-secondary);
+        padding: 4px;
+        border-radius: var(--radius-md);
+        display: inline-flex;
+        border: 1px solid var(--border-color);
+    }
+
+    .market-selector .btn-select {
+        text-decoration: none;
+        color: var(--text-secondary);
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-weight: 600;
+        transition: all 0.2s;
+        font-size: 0.875rem;
+    }
+
+    .market-selector .btn-select.active {
+        background: var(--bg-card);
+        color: var(--accent-blue);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .market-selector .btn-select:hover:not(.active) {
+        color: var(--text-primary);
+    }
+
+    .table-container {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="market-header">
+    <div>
+        <h1>{{ market }} Dashboard</h1>
+        <p class="text-muted">
+            <span style="color: var(--success); font-weight: 700;">● Live</span>
+            Analysis updated: {{ last_updated }}
+        </p>
+    </div>
+    <div class="market-selector">
+        <a href="/dashboard/BSE" class="btn-select {% if market == 'BSE' %}active{% endif %}">BSE SENSEX</a>
+        <a href="/dashboard/NSE" class="btn-select {% if market == 'NSE' %}active{% endif %}">NSE NIFTY 50</a>
+    </div>
+</div>
+
+<div class="table-container">
+    <div style="overflow-x: auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Price (INR)</th>
+                    <th>Signal</th>
+                    <th>Rationale</th>
+                    <th>Forecast Vol (5-Day)</th>
+                    <th>Current Vol</th>
+                    <th>Daily Return</th>
+                    <th>Gamma (Leverage)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stock in stocks %}
+                <tr onclick="window.location='/stock/{{ stock.ticker }}';"
+                    style="cursor: pointer; transition: background-color 0.15s ease;">
+                    <td>
+                        <strong style="color: var(--accent-blue);">{{ stock.ticker }}</strong>
+                    </td>
+                    <td>
+                        {% if stock.last_price is defined %}
+                        {{ "%.2f"|format(stock.last_price) }}
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if 'BUY' in stock.signal %}
+                        <span class="badge badge-buy">BUY</span>
+                        {% elif 'STRONG SELL' in stock.signal %}
+                        <span class="badge badge-sell">STRONG SELL</span>
+                        {% elif 'SELL' in stock.signal %}
+                        <span class="badge badge-sell">SELL</span>
+                        {% elif 'CAUTION' in stock.signal %}
+                        <span class="badge badge-sell"
+                            style="background: rgba(251, 191, 36, 0.15); color: var(--warning); border-color: rgba(251, 191, 36, 0.3);">CAUTION</span>
+                        {% else %}
+                        <span class="badge badge-hold">HOLD</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-secondary" style="font-size: 0.9em;">
+                        {{ stock.reason }}
+                    </td>
+                    <td style="font-family: monospace;">
+                        {% if stock.forecast_volatility is defined %}
+                        {{ "%.4f"|format(stock.forecast_volatility) }}
+                        {% if stock.forecast_volatility > stock.current_volatility %}
+                        <span class="text-danger" style="font-size: 0.8em;">↑</span>
+                        {% else %}
+                        <span class="text-success" style="font-size: 0.8em;">↓</span>
+                        {% endif %}
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                    <td style="font-family: monospace; color: var(--text-muted);">
+                        {% if stock.current_volatility is defined %}
+                        {{ "%.4f"|format(stock.current_volatility) }}
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                    <td>
+                        <!-- Basic return calc visualization if available, or just placeholder -->
+                        {% if stock.returns and stock.returns|length > 0 %}
+                        {% set ret = stock.returns[-1] %}
+                        <span class="{% if ret > 0 %}text-success{% elif ret < 0 %}text-danger{% endif %}">
+                            {{ "%.2f"|format(ret * 100) }}%
+                        </span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if stock.gamma is defined %}
+                        {{ "%.3f"|format(stock.gamma) }}
+                        {% if stock.gamma > 0.1 %}
+                        <span class="text-warning" title="High Leverage Risk">⚠️</span>
+                        {% endif %}
+                        {% else %}
+                        N/A
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

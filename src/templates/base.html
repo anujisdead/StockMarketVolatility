@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% block meta_refresh %}{% endblock %}
+
+    <title>{% block title %}VolatilityAI{% endblock %} - Financial Modeling Platform</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    {% block extra_css %}{% endblock %}
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="main-header">
+            <div class="nav-container">
+                <a href="/" class="brand">VolatilityAI</a>
+
+                <nav class="nav-links">
+                    <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">Home</a>
+                    <a href="/dashboard"
+                        class="nav-link {% if 'dashboard' in request.path %}active{% endif %}">Dashboard</a>
+                    <a href="/methodology"
+                        class="nav-link {% if 'methodology' in request.path %}active{% endif %}">Methodology</a>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- Footer -->
+        <footer class="main-footer">
+            <div class="nav-container">
+                <p>&copy; 2026 VolatilityAI. All rights reserved.</p>
+                <p>
+                    <small class="text-muted">
+                        Disclaimer: This platform generates automated signals based on historical volatility models
+                        (ARMA-GARCH-TGARCH).
+                        It does not constitute financial advice. Trading stocks involves risk.
+                    </small>
+                </p>
+                <div style="margin-top: 10px;">
+                    <span class="badge badge-hold">System Status: Operational</span>
+                    <span class="text-muted" style="margin-left: 10px;">• Last Update: Auto (15m)</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>
