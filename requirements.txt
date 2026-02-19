@@ -8,3 +8,4 @@ arch
 scipy
 flask
 Flask-APScheduler
+feedparser

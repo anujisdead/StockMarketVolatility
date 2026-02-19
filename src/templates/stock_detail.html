@@ -43,18 +43,71 @@
         <h1 style="margin-bottom: 0.5rem;">{{ ticker }}</h1>
         <p class="text-secondary">Historical Price & Volatility Analysis (10-Year)</p>
     </div>
-    <a href="/dashboard" class="btn btn-outline" style="display: flex; align-items: center; gap: 8px;">
-        <span>←</span> Back to Dashboard
-    </a>
+    <div style="display: flex; gap: 1rem;">
+        <a href="/api/export/{{ ticker }}" target="_blank" class="btn btn-outline"
+            style="display: flex; align-items: center; gap: 8px;">
+            <span>📄</span> Export PDF
+        </a>
+        <a href="/dashboard" class="btn btn-outline" style="display: flex; align-items: center; gap: 8px;">
+            <span>←</span> Back to Dashboard
+        </a>
+    </div>
 </div>
 
-<div class="chart-card">
-    <div id="loading" class="loading-overlay">
-        <div class="text-primary" style="font-size: 1.1rem; font-weight: 500;">
-            Loading detailed analysis data...
+<div class="test-container" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
+    <!-- Main Chart -->
+    <div class="chart-card">
+        <div id="loading" class="loading-overlay">
+            <div class="text-primary" style="font-size: 1.1rem; font-weight: 500;">
+                Loading detailed analysis data...
+            </div>
+        </div>
+        <canvas id="stockChart"></canvas>
+    </div>
+
+    <!-- Performance/Backtest Card -->
+    <div class="card" style="height: 600px; display: flex; flex-direction: column;">
+        <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">Strategy Backtest (1Y)</h3>
+        <p class="text-secondary" style="font-size: 0.9rem; margin-bottom: 1.5rem;">
+            Simulation: Buy if Vol drops >5%, Sell if Vol spikes >5%.
+        </p>
+
+        <div id="backtest-loading" class="text-muted" style="text-align: center; padding: 2rem;">
+            Running simulation...
+        </div>
+
+        <div id="backtest-results" style="display: none; flex: 1; flex-direction: column;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Strategy
+                    </div>
+                    <div id="strat-return" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-blue);">--%
+                    </div>
+                </div>
+                <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 8px; text-align: center;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase;">Buy & Hold
+                    </div>
+                    <div id="bh-return" style="font-size: 1.5rem; font-weight: 700; color: var(--text-muted);">--%</div>
+                </div>
+            </div>
+
+            <div style="flex: 1; position: relative; min-height: 0;">
+                <canvas id="backtestChart"></canvas>
+            </div>
         </div>
     </div>
-    <canvas id="stockChart"></canvas>
+</div>
+
+</div>
+
+<!-- News Section -->
+<div class="card" style="margin-top: 1.5rem;">
+    <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">Market News & Context</h3>
+    <div id="news-loading" class="text-muted">Loading latest news...</div>
+    <div id="news-container"
+        style="display: none; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem;">
+        <!-- News items will be injected here -->
+    </div>
 </div>
 
 <!-- Metrics Cards (Optional Future Enhancement) -->
@@ -174,6 +227,134 @@
         });
     }
 
+    async function fetchBacktestData() {
+        try {
+            const response = await fetch(`/api/backtest/${ticker}`);
+            const data = await response.json();
+
+            if (data.error) {
+                document.getElementById('backtest-loading').innerText = "Simulation failed: " + data.error;
+                return;
+            }
+
+            // Update UI Metrics
+            document.getElementById('strat-return').innerText = (data.strategy_return_pct > 0 ? '+' : '') + data.strategy_return_pct + '%';
+            document.getElementById('strat-return').style.color = data.strategy_return_pct >= data.buy_hold_return_pct ? 'var(--success)' : 'var(--danger)';
+
+            document.getElementById('bh-return').innerText = (data.buy_hold_return_pct > 0 ? '+' : '') + data.buy_hold_return_pct + '%';
+
+            document.getElementById('backtest-loading').style.display = 'none';
+            document.getElementById('backtest-results').style.display = 'flex';
+
+            renderBacktestChart(data);
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById('backtest-loading').innerText = "Simulation error.";
+        }
+    }
+
+    function renderBacktestChart(data) {
+        const ctx = document.getElementById('backtestChart').getContext('2d');
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.dates,
+                datasets: [
+                    {
+                        label: 'Strategy',
+                        data: data.strategy_curve,
+                        borderColor: '#34d399', // success/emerald
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Buy & Hold',
+                        data: data.buy_hold_curve,
+                        borderColor: '#64748b', // muted/slate
+                        borderWidth: 2,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: { boxWidth: 8, usePointStyle: true }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false
+                    }
+                },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        display: true,
+                        grid: { color: 'rgba(255,255,255,0.05)' }
+                    }
+                }
+            }
+        });
+    }
+
+    async function fetchNewsData() {
+        try {
+            const response = await fetch(`/api/news/${ticker}`);
+            const data = await response.json();
+
+            const container = document.getElementById('news-container');
+            const loading = document.getElementById('news-loading');
+
+            if (data.error || !data.news || data.news.length === 0) {
+                loading.innerText = "No specific news found.";
+                return;
+            }
+
+            loading.style.display = 'none';
+            container.style.display = 'grid';
+            container.innerHTML = '';
+
+            data.news.forEach(item => {
+                const date = new Date(item.published).toLocaleDateString();
+                const card = document.createElement('a');
+                card.href = item.link;
+                card.target = '_blank';
+                card.className = 'news-item';
+                card.style.display = 'block';
+                card.style.padding = '1rem';
+                card.style.background = 'rgba(255,255,255,0.03)';
+                card.style.borderRadius = '8px';
+                card.style.border = '1px solid var(--border-color)';
+                card.style.textDecoration = 'none';
+                card.style.transition = 'transform 0.2s';
+
+                card.innerHTML = `
+                    <div style="font-size: 0.8rem; color: var(--accent-blue); margin-bottom: 0.5rem;">${item.source} • ${date}</div>
+                    <div style="font-weight: 500; color: var(--text-primary); line-height: 1.4;">${item.title}</div>
+                `;
+
+                card.onmouseover = () => { card.style.background = 'rgba(255,255,255,0.05)'; };
+                card.onmouseout = () => { card.style.background = 'rgba(255,255,255,0.03)'; };
+
+                container.appendChild(card);
+            });
+
+        } catch (e) {
+            console.error(e);
+            document.getElementById('news-loading').innerText = "Failed to load news.";
+        }
+    }
+
     fetchStockData();
+    fetchBacktestData();
+    fetchNewsData();
 </script>
 {% endblock %}

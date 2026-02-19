@@ -63,9 +63,28 @@
         </p>
     </div>
     <div class="market-selector">
+        <button class="btn-select" id="optimizeBtn" onclick="runOptimization()" disabled>
+            Optimize (<span id="selCount">0</span>)
+        </button>
+        <span style="border-left: 1px solid var(--border-color); margin: 0 8px;"></span>
+        <button id="toggleFavorites" class="btn-select" onclick="toggleFavoritesView()">
+            ★ Watchlist Only
+        </button>
+        <span style="border-left: 1px solid var(--border-color); margin: 0 8px;"></span>
         <a href="/dashboard/BSE" class="btn-select {% if market == 'BSE' %}active{% endif %}">BSE SENSEX</a>
         <a href="/dashboard/NSE" class="btn-select {% if market == 'NSE' %}active{% endif %}">NSE NIFTY 50</a>
     </div>
+</div>
+
+<!-- Optimization Result Modal -->
+<div id="optModal"
+    style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:var(--bg-card); border:1px solid var(--text-header); padding:2rem; z-index:1000; width:400px; box-shadow: 0 0 20px rgba(0,0,0,0.8);">
+    <h3
+        style="color:var(--text-header); border-bottom:1px solid var(--border-color); padding-bottom:0.5rem; margin-bottom:1rem;">
+        Efficient Portfolio</h3>
+    <div id="optContent">Loading...</div>
+    <button class="btn btn-primary" style="margin-top:1rem; width:100%;"
+        onclick="document.getElementById('optModal').style.display='none'">Close</button>
 </div>
 
 <div class="table-container">
@@ -73,6 +92,8 @@
         <table class="data-table">
             <thead>
                 <tr>
+                    <th style="width: 30px;"></th>
+                    <th style="width: 40px;">★</th>
                     <th>Ticker</th>
                     <th>Price (INR)</th>
                     <th>Signal</th>
@@ -85,9 +106,17 @@
             </thead>
             <tbody>
                 {% for stock in stocks %}
-                <tr onclick="window.location='/stock/{{ stock.ticker }}';"
+                <tr class="stock-row" data-ticker="{{ stock.ticker }}"
                     style="cursor: pointer; transition: background-color 0.15s ease;">
-                    <td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="stock-select" value="{{ stock.ticker }}"
+                            onchange="updateSelection()">
+                    </td>
+                    <td onclick="event.stopPropagation(); toggleStar(this, '{{ stock.ticker }}');"
+                        style="cursor: pointer; text-align: center; font-size: 1.2rem; color: var(--text-muted);">
+                        ☆
+                    </td>
+                    <td onclick="window.location='/stock/{{ stock.ticker }}';">
                         <strong style="color: var(--accent-blue);">{{ stock.ticker }}</strong>
                     </td>
                     <td>
@@ -160,4 +189,135 @@
         </table>
     </div>
 </div>
+
+<script>
+    // Watchlist Logic
+    let showFavoritesOnly = false;
+
+    function getFavorites() {
+        return JSON.parse(localStorage.getItem('volatility_watchlist') || '[]');
+    }
+
+    function isFavorite(ticker) {
+        return getFavorites().includes(ticker);
+    }
+
+    function toggleStar(element, ticker) {
+        const favorites = getFavorites();
+        const index = favorites.indexOf(ticker);
+
+        if (index === -1) {
+            favorites.push(ticker);
+            element.innerHTML = '★';
+            element.style.color = 'var(--warning)';
+        } else {
+            favorites.splice(index, 1);
+            element.innerHTML = '☆';
+            element.style.color = 'var(--text-muted)';
+        }
+
+        localStorage.setItem('volatility_watchlist', JSON.stringify(favorites));
+
+        if (showFavoritesOnly) {
+            applyFilter();
+        }
+    }
+
+    function toggleFavoritesView() {
+        showFavoritesOnly = !showFavoritesOnly;
+        const btn = document.getElementById('toggleFavorites');
+
+        if (showFavoritesOnly) {
+            btn.classList.add('active');
+            btn.innerHTML = '★ Watchlist Active';
+        } else {
+            btn.classList.remove('active');
+            btn.innerHTML = '★ Watchlist Only';
+        }
+        applyFilter();
+    }
+
+    function applyFilter() {
+        const rows = document.querySelectorAll('.stock-row');
+        const favorites = getFavorites();
+
+        rows.forEach(row => {
+            const ticker = row.dataset.ticker;
+            // Initialize stars on load/filter
+            const starCell = row.querySelector('td:nth-child(2)'); // 2nd column now
+            if (favorites.includes(ticker)) {
+                starCell.innerHTML = '★';
+                starCell.style.color = 'var(--warning)';
+            } else {
+                starCell.innerHTML = '☆';
+                starCell.style.color = 'var(--text-muted)';
+            }
+
+            // Apply visibility
+            if (showFavoritesOnly && !favorites.includes(ticker)) {
+                row.style.display = 'none';
+            } else {
+                row.style.display = 'table-row';
+            }
+        });
+    }
+
+    // Optimization Logic
+    function updateSelection() {
+        const checked = document.querySelectorAll('.stock-select:checked');
+        document.getElementById('selCount').innerText = checked.length;
+        document.getElementById('optimizeBtn').disabled = checked.length < 2;
+        
+        if (checked.length >= 2) {
+             document.getElementById('optimizeBtn').style.color = 'var(--text-header)';
+             document.getElementById('optimizeBtn').style.borderColor = 'var(--text-header)';
+        } else {
+             document.getElementById('optimizeBtn').style.color = 'var(--text-muted)';
+             document.getElementById('optimizeBtn').style.borderColor = 'var(--border-color)';
+        }
+    }
+
+    async function runOptimization() {
+        const checked = Array.from(document.querySelectorAll('.stock-select:checked')).map(cb => cb.value);
+        if (checked.length < 2) return;
+        
+        const modal = document.getElementById('optModal');
+        const content = document.getElementById('optContent');
+        
+        modal.style.display = 'block';
+        content.innerHTML = '<div style="color:var(--accent-blue)">Calculating Efficient Frontier...</div>';
+        
+        try {
+            const response = await fetch('/api/optimize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tickers: checked })
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                content.innerHTML = `<div style="color:var(--danger)">Error: ${data.error}</div>`;
+            } else {
+                let html = `<div style="margin-bottom:1rem; font-size:0.9rem; color:var(--text-secondary);">Minimizing Portfolio Volatility: <strong>${data.annual_volatility}%</strong></div>`;
+                html += '<ul style="list-style:none; padding:0;">';
+                for (const [ticker, weight] of Object.entries(data.allocation)) {
+                    html += `<li style="display:flex; justify-content:space-between; padding:0.5rem 0; border-bottom:1px solid var(--border-color);">
+                        <span>${ticker}</span>
+                        <span style="color:var(--success); font-weight:700;">${weight}%</span>
+                    </li>`;
+                }
+                html += '</ul>';
+                content.innerHTML = html;
+            }
+        } catch (e) {
+            console.error(e);
+            content.innerHTML = `<div style="color:var(--danger)">Network Error</div>`;
+        }
+    }
+
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', () => {
+        applyFilter();
+    });
+</script>
 {% endblock %}
