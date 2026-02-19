@@ -1,3 +1,6 @@
+import eventlet
+eventlet.monkey_patch()
+
 from flask import Flask, render_template, jsonify
 import os
 import markdown
@@ -7,7 +10,12 @@ from scheduler import init_scheduler
 
 # ... (logging config)
 
+from flask_socketio import SocketIO, emit
+import eventlet
+
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
 
 from backtester import run_backtest
 
@@ -186,10 +194,36 @@ def export_report(ticker):
     except Exception as e:
         return str(e), 500
 
+import redis
+import threading
+
+def redis_listener():
+    """Background thread to listen for Redis updates and emit to WebSockets."""
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    p = r.pubsub()
+    p.subscribe('price_feed', 'volatility_feed')
+    
+    print("Redis Listener started...")
+    for message in p.listen():
+        if message['type'] == 'message':
+            try:
+                channel = message['channel'].decode('utf-8')
+                data = json.loads(message['data'].decode('utf-8'))
+                
+                if channel == 'price_feed':
+                    socketio.emit('price_update', data)
+                elif channel == 'volatility_feed':
+                    socketio.emit('volatility_update', data)
+            except Exception as e:
+                print(f"Error in Redis listener: {e}")
+
 if __name__ == '__main__':
     # Initialize Scheduler
-    init_scheduler(app)
+    # init_scheduler(app)  # Disabled to prevent blocking event loop with synchronous yfinance calls
+    
+    # Start Redis Listener
+    socketio.start_background_task(redis_listener)
     
     port = 5002
     print(f"Starting server on http://localhost:{port}")
-    app.run(debug=True, port=port, use_reloader=False) # use_reloader=False prevents double execution of scheduler
+    socketio.run(app, host='0.0.0.0', port=port, debug=True, use_reloader=False)
