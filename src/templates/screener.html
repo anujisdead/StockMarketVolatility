@@ -1,0 +1,318 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Screener{% endblock %}
+
+{% block extra_css %}
+<style>
+    .screener-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 1.5rem;
+        margin-top: 1rem;
+    }
+
+    .filter-panel {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        height: fit-content;
+    }
+
+    .results-panel {
+        background: var(--bg-secondary);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        min-height: 500px;
+    }
+
+    .filter-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-group label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .filter-select,
+    .filter-input {
+        width: 100%;
+        background: var(--bg-terminal);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        padding: 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.9rem;
+    }
+
+    .filter-select:focus,
+    .filter-input:focus {
+        outline: none;
+        border-color: var(--accent-blue);
+    }
+
+    .table-container {
+        overflow-x: auto;
+    }
+
+    .screener-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .screener-table th {
+        text-align: left;
+        padding: 0.75rem 1rem;
+        border-bottom: 2px solid var(--border-color);
+        color: var(--text-secondary);
+        font-weight: 500;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+    }
+
+    .screener-table td {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: middle;
+    }
+
+    .screener-table tr:hover {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .btn-apply {
+        width: 100%;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Stock Screener</h1>
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-outline-secondary active" id="btn-interday"
+            onclick="switchMode('interday')">Interday (Analysis)</button>
+        <button type="button" class="btn btn-outline-secondary" id="btn-intraday"
+            onclick="switchMode('intraday')">Intraday (Live)</button>
+    </div>
+</div>
+
+<div class="screener-layout">
+    <!-- Filter Sidebar -->
+    <div class="filter-panel">
+        <h3
+            style="margin-bottom: 1.25rem; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+            Filters</h3>
+
+        <!-- Interday Filters -->
+        <div id="filters-interday">
+            <div class="filter-group">
+                <label>Trading Signal</label>
+                <select class="filter-select" id="filter-signal">
+                    <option value="ALL">All Signals</option>
+                    <option value="BUY">Buy</option>
+                    <option value="SELL">Sell</option>
+                    <option value="HOLD">Hold</option>
+                    <option value="STRONG BUY">Strong Buy</option>
+                    <option value="STRONG SELL">Strong Sell</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label>Max Volatility (%)</label>
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="range" id="filter-vol" min="0" max="1" step="0.05" value="1" style="flex: 1;">
+                    <span id="vol-val" style="font-family: monospace; width: 40px; text-align: right;">100%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Intraday Filters -->
+        <div id="filters-intraday" style="display: none;">
+            <div class="filter-group">
+                <label>Min Change (%)</label>
+                <input type="number" class="filter-input" id="filter-change" placeholder="e.g. 1.5, -2.0" step="0.1">
+            </div>
+            <p class="text-secondary" style="font-size: 0.8rem; margin-top: 1rem;">
+                * Intraday screener uses live data from the price engine.
+            </p>
+        </div>
+
+        <button class="btn btn-primary btn-apply" onclick="applyFilters()">Apply Filters</button>
+    </div>
+
+    <!-- Results Area -->
+    <div class="results-panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="font-size: 1.1rem;">Results <span id="result-count" class="text-secondary"
+                    style="font-size: 0.9rem; font-weight: normal;">(0)</span></h3>
+        </div>
+
+        <div class="table-container">
+            <table class="screener-table">
+                <thead id="table-head">
+                    <!-- Injected dynamically based on mode -->
+                </thead>
+                <tbody id="table-body">
+                    <tr>
+                        <td colspan="5" class="text-center text-secondary">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentMode = 'interday';
+
+    // Volatility Slider label update
+    document.getElementById('filter-vol').addEventListener('input', function (e) {
+        document.getElementById('vol-val').innerText = Math.round(e.target.value * 100) + '%';
+    });
+
+    function switchMode(mode) {
+        currentMode = mode;
+
+        // Update Buttons
+        if (mode === 'interday') {
+            document.getElementById('btn-interday').classList.add('active');
+            document.getElementById('btn-interday').classList.remove('btn-outline-secondary');
+            document.getElementById('btn-interday').classList.add('btn-secondary');
+
+            document.getElementById('btn-intraday').classList.remove('active', 'btn-secondary');
+            document.getElementById('btn-intraday').classList.add('btn-outline-secondary');
+
+            document.getElementById('filters-interday').style.display = 'block';
+            document.getElementById('filters-intraday').style.display = 'none';
+        } else {
+            document.getElementById('btn-intraday').classList.add('active', 'btn-secondary');
+            document.getElementById('btn-intraday').classList.remove('btn-outline-secondary');
+
+            document.getElementById('btn-interday').classList.remove('active', 'btn-secondary');
+            document.getElementById('btn-interday').classList.add('btn-outline-secondary');
+
+            document.getElementById('filters-interday').style.display = 'none';
+            document.getElementById('filters-intraday').style.display = 'block';
+        }
+
+        renderTableHeaders();
+        applyFilters();
+    }
+
+    function renderTableHeaders() {
+        const thead = document.getElementById('table-head');
+        if (currentMode === 'interday') {
+            thead.innerHTML = `
+                <tr>
+                    <th>Ticker</th>
+                    <th>Price</th>
+                    <th>Volatility</th>
+                    <th>Signal</th>
+                    <th>Action</th>
+                </tr>
+            `;
+        } else {
+            thead.innerHTML = `
+                <tr>
+                    <th>Ticker</th>
+                    <th>Live Price</th>
+                    <th>Change %</th>
+                    <th>Time</th>
+                    <th>Action</th>
+                </tr>
+            `;
+        }
+    }
+
+    async function applyFilters() {
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">Loading data...</td></tr>`;
+
+        const payload = { type: currentMode, filters: {} };
+
+        if (currentMode === 'interday') {
+            payload.filters.signal = document.getElementById('filter-signal').value;
+            payload.filters.max_vol = document.getElementById('filter-vol').value;
+        } else {
+            const chg = document.getElementById('filter-change').value;
+            if (chg) payload.filters.min_change = parseFloat(chg);
+        }
+
+        try {
+            const response = await fetch('/api/screener', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (data.error) throw new Error(data.error);
+
+            document.getElementById('result-count').innerText = `(${data.results.length})`;
+
+            if (data.results.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">No stocks matched the criteria.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = '';
+
+            data.results.forEach(stock => {
+                const tr = document.createElement('tr');
+
+                if (currentMode === 'interday') {
+                    const price = stock.last_price ? stock.last_price.toFixed(2) : '-';
+                    const vol = stock.current_volatility ? (stock.current_volatility * 100).toFixed(2) + '%' : '-';
+
+                    let signalColor = 'var(--text-primary)';
+                    if (stock.signal && stock.signal.includes('BUY')) signalColor = 'var(--success)';
+                    else if (stock.signal && stock.signal.includes('SELL')) signalColor = 'var(--danger)';
+
+                    tr.innerHTML = `
+                        <td><a href="/stock/${stock.ticker}" style="color: var(--accent-blue); text-decoration: none; font-weight: 500;">${stock.ticker}</a></td>
+                        <td>${price}</td>
+                        <td>${vol}</td>
+                        <td style="color: ${signalColor}; font-weight: 600;">${stock.signal || '-'}</td>
+                        <td><a href="/stock/${stock.ticker}" class="btn btn-xs btn-outline">Details</a></td>
+                    `;
+                } else {
+                    const price = stock.price ? stock.price.toFixed(2) : '-';
+                    const chg = stock.change_pct ? stock.change_pct.toFixed(2) : '0.00';
+                    const time = stock.time ? new Date(stock.time).toLocaleTimeString() : '-';
+
+                    let chgColor = stock.change_pct >= 0 ? 'var(--success)' : 'var(--danger)';
+                    const sign = stock.change_pct > 0 ? '+' : '';
+
+                    tr.innerHTML = `
+                        <td><a href="/stock/${stock.ticker}" style="color: var(--accent-blue); text-decoration: none; font-weight: 500;">${stock.ticker}</a></td>
+                        <td>${price}</td>
+                        <td style="color: ${chgColor}; font-weight: 600;">${sign}${chg}%</td>
+                        <td class="text-secondary" style="font-size: 0.85rem;">${time}</td>
+                        <td><a href="/stock/${stock.ticker}" class="btn btn-xs btn-outline">Details</a></td>
+                    `;
+                }
+
+                tbody.appendChild(tr);
+            });
+
+        } catch (e) {
+            console.error(e);
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error loading data.</td></tr>`;
+        }
+    }
+
+    // Init
+    switchMode('interday');
+</script>
+{% endblock %}

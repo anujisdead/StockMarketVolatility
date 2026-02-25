@@ -197,6 +197,68 @@ def export_report(ticker):
 import redis
 import threading
 
+@app.route('/screener')
+def screener():
+    return render_template('screener.html')
+
+@app.route('/api/screener', methods=['POST'])
+def api_screener():
+    try:
+        data = request.get_json()
+        screen_type = data.get('type', 'interday')
+        filters = data.get('filters', {})
+        
+        results = []
+        
+        if screen_type == 'interday':
+            # Load from static analysis files
+            bse_data = load_stock_results('BSE').get('results', [])
+            nse_data = load_stock_results('NSE').get('results', [])
+            all_stocks = bse_data + nse_data
+            
+            for stock in all_stocks:
+                # Apply Filters
+                # 1. Signal
+                if filters.get('signal') and filters['signal'] != 'ALL':
+                    if filters['signal'] not in stock.get('signal', ''):
+                        continue
+                
+                # 2. Volatility (Max)
+                if filters.get('max_vol'):
+                    vol = stock.get('current_volatility', 0)
+                    if vol > float(filters['max_vol']):
+                        continue
+                        
+                results.append(stock)
+                
+        elif screen_type == 'intraday':
+            # Load from Redis Snapshot
+            r = redis.Redis(host='localhost', port=6379, db=0)
+            snapshot = r.hgetall('intraday_snapshot')
+            
+            for ticker_bytes, data_bytes in snapshot.items():
+                try:
+                    s_data = json.loads(data_bytes.decode('utf-8'))
+                    # Structure: {ticker, price, change_pct, time}
+                    
+                    # Apply Filters
+                    # 1. Min Change %
+                    if filters.get('min_change'):
+                        if s_data.get('change_pct', 0) < float(filters['min_change']):
+                            continue
+                            
+                    results.append(s_data)
+                except:
+                    continue
+            
+            # Sort Intraday by Change % Descending by default
+            results.sort(key=lambda x: x.get('change_pct', 0), reverse=True)
+
+        return jsonify({'results': results})
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def redis_listener():
     """Background thread to listen for Redis updates and emit to WebSockets."""
     r = redis.Redis(host='localhost', port=6379, db=0)

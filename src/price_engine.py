@@ -51,23 +51,29 @@ async def fetch_yahoo(session, ticker):
                 data = await response.json()
                 meta = data['chart']['result'][0]['meta']
                 price = meta['regularMarketPrice']
-                return price
+                prev_close = meta.get('chartPreviousClose', meta.get('previousClose', price))
+                return price, prev_close
     except Exception:
         pass
-    return None
+    return None, None
 
 async def ticker_loop(session, ticker):
     # For now, we rely primarily on Yahoo as the reliable free source.
-    # Extending to scraping HTML from Investing.com is possible but high latency/ban risk without proxies.
-    # Given the 1s requirement, API endpoints are preferred.
-    price = await fetch_yahoo(session, ticker)
+    price, prev_close = await fetch_yahoo(session, ticker)
     
     if price:
         timestamp = datetime.now().isoformat()
+        change_pct = ((price - prev_close) / prev_close) * 100 if prev_close else 0.0
         
-        # Publish Price
-        msg = json.dumps({'ticker': ticker, 'price': price, 'time': timestamp})
+        # Publish Price & Change
+        msg = json.dumps({
+            'ticker': ticker, 
+            'price': price, 
+            'change_pct': change_pct,
+            'time': timestamp
+        })
         r.publish('price_feed', msg)
+        r.hset('intraday_snapshot', ticker, msg)
         
         # Update History & Calculate Volatility
         history = price_history.get(ticker, [])

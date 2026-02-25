@@ -68,6 +68,28 @@
 <div class="test-container" style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-top: 1.5rem;">
     <!-- Main Chart -->
     <div class="chart-card">
+        <div style="position: absolute; top: 0.75rem; right: 0.75rem; z-index: 5;">
+            <div class="btn-group" role="group" aria-label="Time Range">
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('10y')">10Y</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('5y')">5Y</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('3y')">3Y</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('1y')">1Y</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('6m')">6M</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('3m')">3M</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('1m')">1M</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('1w')">1W</button>
+                <button type="button" class="btn btn-outline-secondary" style="padding: 2px 6px; font-size: 0.7rem;"
+                    onclick="updateTimeRange('1d')">1D</button>
+            </div>
+        </div>
         <div id="loading" class="loading-overlay">
             <div class="text-primary" style="font-size: 1.1rem; font-weight: 500;">
                 Loading detailed analysis data...
@@ -129,6 +151,8 @@
 <script>
     const ticker = "{{ ticker }}";
     let stockChartInstance = null;
+    let completeData = null; // Store full 10y data
+    let currentRange = '10y';
 
     // Connect to WebSocket
     const socket = io();
@@ -156,17 +180,8 @@
                 stockChartInstance.data.labels.push(timeStr);
                 stockChartInstance.data.datasets[0].data.push(data.price);
 
-                // Keep chart window fixed (e.g. 50 points window for "Zoomed In" effect, or append to history?)
-                // If we append to 10 years os history, it's invisible.
-                // WE SHOULD PROBABLY SHOW ONLY RECENT DATA or Zoom in?
-                // For "Real Time" Feel, maybe we should slice the chart to show only last N points if it gets too crowded?
-                // Or just let it grow. Let's let it grow for now as user verified 10y history.
-                // Actually, typically real-time charts show last X minutes.
-                // But the user asked to "replace the existing stock market chart".
-                // The existing chart shows 10 years. 1-second updates on 10-year chart are invisible.
-                // I will add logic: If huge history, maybe we don't shift.
-                // But for visibility, I'll just append.
-
+                // If viewing a short range (e.g. 1d), we want to see new points clearly.
+                // If viewing 10y, appending one point is fine but invisible.
                 stockChartInstance.update('none');
             }
         }
@@ -180,9 +195,6 @@
 
             if (stockChartInstance && stockChartInstance.data.datasets[1]) {
                 stockChartInstance.data.datasets[1].data.push(data.volatility);
-                // Align lengths if needed, but price update handles labels.
-                // If vol comes faster/slower, we might have mismatch.
-                // Assuming sync-ish.
                 stockChartInstance.update('none');
             }
         }
@@ -191,6 +203,66 @@
     // Chart.js Default Configuration for Dark Mode
     Chart.defaults.color = '#94a3b8';
     Chart.defaults.borderColor = '#334155';
+
+    function filterDataByRange(range) {
+        if (!completeData) return { dates: [], normalized_price: [], volatility_history: [] };
+
+        const cutoffDate = new Date();
+        const dates = completeData.dates.map(d => new Date(d));
+
+        switch (range) {
+            case '10y': cutoffDate.setFullYear(cutoffDate.getFullYear() - 10); break;
+            case '5y': cutoffDate.setFullYear(cutoffDate.getFullYear() - 5); break;
+            case '3y': cutoffDate.setFullYear(cutoffDate.getFullYear() - 3); break;
+            case '1y': cutoffDate.setFullYear(cutoffDate.getFullYear() - 1); break;
+            case '6m': cutoffDate.setMonth(cutoffDate.getMonth() - 6); break;
+            case '3m': cutoffDate.setMonth(cutoffDate.getMonth() - 3); break;
+            case '1m': cutoffDate.setMonth(cutoffDate.getMonth() - 1); break;
+            case '1w': cutoffDate.setDate(cutoffDate.getDate() - 7); break;
+            case '1d': cutoffDate.setDate(cutoffDate.getDate() - 1); break;
+            default: cutoffDate.setFullYear(cutoffDate.getFullYear() - 10);
+        }
+
+        // Find start index
+        let startIndex = 0;
+        // Optimization: If range is 10y, take all (avoid loop if possible, though loop is fast for 3000 items)
+        if (range !== '10y') {
+            startIndex = dates.findIndex(d => d >= cutoffDate);
+            if (startIndex === -1) startIndex = 0; // Fallback
+        }
+
+        return {
+            dates: completeData.dates.slice(startIndex),
+            normalized_price: completeData.normalized_price.slice(startIndex),
+            volatility_history: completeData.volatility_history.slice(startIndex)
+        };
+    }
+
+    function updateTimeRange(range) {
+        currentRange = range;
+
+        // Highlight active button
+        const buttons = document.querySelectorAll('.btn-group .btn');
+        buttons.forEach(btn => {
+            if (btn.innerText.toLowerCase() === range) {
+                btn.classList.add('active', 'btn-secondary');
+                btn.classList.remove('btn-outline-secondary');
+            } else {
+                btn.classList.remove('active', 'btn-secondary');
+                btn.classList.add('btn-outline-secondary');
+            }
+        });
+
+        if (completeData) {
+            const filtered = filterDataByRange(range);
+
+            stockChartInstance.data.labels = filtered.dates;
+            stockChartInstance.data.datasets[0].data = filtered.normalized_price;
+            stockChartInstance.data.datasets[1].data = filtered.volatility_history;
+
+            stockChartInstance.update();
+        }
+    }
 
     async function fetchStockData() {
         try {
@@ -202,7 +274,103 @@
                 return;
             }
 
-            renderChart(data);
+            // Store complete data
+            completeData = data;
+
+            // Initial Render (Default 10y or whatever logic)
+            // Use 1y as default for better visibility? User asked for 10y "not only", but said "option to see it in...".
+            // Let's stick to 1y as initial for better UX, or 10Y if user prefers.
+            // "I want the stock chart to be shown not only in a 10 year chart". 
+            // I'll default to 1Y as it looks better.
+
+            // Initialize chart structure first
+            const ctx = document.getElementById('stockChart').getContext('2d');
+            const gradientPrice = ctx.createLinearGradient(0, 0, 0, 400);
+            gradientPrice.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
+            gradientPrice.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+            stockChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Price',
+                            data: [],
+                            borderColor: '#38bdf8', // accent-blue
+                            backgroundColor: gradientPrice,
+                            borderWidth: 2,
+                            yAxisID: 'y',
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            fill: true,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Volatility',
+                            data: [],
+                            borderColor: '#f87171', // danger
+                            backgroundColor: 'rgba(248, 113, 113, 0.1)',
+                            borderWidth: 1.5,
+                            yAxisID: 'y1',
+                            pointRadius: 0,
+                            pointHoverRadius: 0,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            align: 'end',
+                            labels: {
+                                usePointStyle: true,
+                                boxWidth: 8
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                            titleColor: '#f8fafc',
+                            bodyColor: '#cbd5e1',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: true
+                        },
+                        // Add Zoom plugin config if needed, but skipping for now
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 12 }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Normalized Price (Base=100)' },
+                            grid: { borderDash: [4, 4] }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Conditional Volatility' },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+            updateTimeRange('1y');
+
             document.getElementById('loading').style.display = 'none';
         } catch (e) {
             console.error(e);
@@ -218,14 +386,15 @@
         gradientPrice.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
         gradientPrice.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
 
+        // We initially render with empty data, then updateTimeRange fills it
         stockChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: data.dates,
+                labels: [],
                 datasets: [
                     {
-                        label: 'Normalized Price (LHS)',
-                        data: data.normalized_price,
+                        label: 'Price',
+                        data: [],
                         borderColor: '#38bdf8', // accent-blue
                         backgroundColor: gradientPrice,
                         borderWidth: 2,
@@ -236,8 +405,8 @@
                         tension: 0.1
                     },
                     {
-                        label: 'Volatility (RHS)',
-                        data: data.volatility_history,
+                        label: 'Volatility',
+                        data: [],
                         borderColor: '#f87171', // danger
                         backgroundColor: 'rgba(248, 113, 113, 0.1)',
                         borderWidth: 1.5,
