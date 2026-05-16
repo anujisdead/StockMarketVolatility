@@ -1,5 +1,5 @@
-import eventlet
-eventlet.monkey_patch()
+from gevent import monkey
+monkey.patch_all()
 
 from flask import Flask, render_template, jsonify
 import os
@@ -11,11 +11,11 @@ from scheduler import init_scheduler
 # ... (logging config)
 
 from flask_socketio import SocketIO, emit
-import eventlet
+
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
 
 from backtester import run_backtest
 
