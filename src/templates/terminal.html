@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+{% block title %}Paper Trading Terminal{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Bloomberg Terminal Layout */
+.terminal-grid { display: grid; grid-template-columns: 280px 1fr 320px; grid-template-rows: auto 1fr auto; gap: 1px; background: #1a1a1a; border: 2px solid var(--text-header); min-height: calc(100vh - 120px); }
+.panel { background: #000; padding: 10px; overflow-y: auto; }
+.panel-header { color: var(--text-header); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 6px; margin-bottom: 8px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
+
+/* Top Bar - Portfolio Stats */
+.stats-bar { grid-column: 1 / -1; display: flex; gap: 1px; background: #1a1a1a; }
+.stat-cell { background: #000; padding: 8px 14px; flex: 1; text-align: center; }
+.stat-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.stat-value { font-size: 1.1rem; font-weight: 700; margin-top: 2px; }
+.stat-value.positive { color: var(--success); }
+.stat-value.negative { color: var(--danger); }
+
+/* Stock List Panel */
+.stock-search { width: 100%; background: #111; border: 1px solid #333; color: #fff; padding: 6px 8px; font-family: monospace; font-size: 0.8rem; margin-bottom: 8px; outline: none; }
+.stock-search:focus { border-color: var(--text-header); }
+.stock-item { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; padding: 5px 4px; border-bottom: 1px solid #111; cursor: pointer; font-size: 0.78rem; align-items: center; transition: background 0.1s; }
+.stock-item:hover { background: #111; }
+.stock-item.selected { background: #1a1200; border-left: 2px solid var(--text-header); }
+.stock-ticker { color: var(--accent-blue); font-weight: 700; }
+.stock-price { color: var(--text-primary); text-align: right; }
+.stock-signal { font-size: 0.7rem; text-align: right; font-weight: 700; }
+
+/* Main Trading Panel */
+.trade-panel { display: flex; flex-direction: column; gap: 1px; background: #1a1a1a; }
+.trade-form-area { background: #000; padding: 12px; }
+.positions-area { background: #000; padding: 10px; flex: 1; overflow-y: auto; }
+
+/* Trade Form */
+.trade-form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.selected-stock-display { grid-column: 1 / -1; background: #0a0a0a; border: 1px solid #333; padding: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.selected-stock-name { font-size: 1.1rem; font-weight: 700; color: var(--accent-blue); }
+.selected-stock-price { font-size: 1.3rem; font-weight: 700; color: var(--text-header); }
+.trade-input { background: #111; border: 1px solid #333; color: #fff; padding: 8px; font-family: monospace; font-size: 0.85rem; width: 100%; box-sizing: border-box; }
+.trade-input:focus { border-color: var(--text-header); outline: none; }
+.trade-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; margin-bottom: 3px; }
+.trade-cost { grid-column: 1 / -1; text-align: right; font-size: 0.85rem; color: var(--text-secondary); padding: 4px 0; }
+
+.btn-buy, .btn-sell { padding: 10px; font-family: monospace; font-weight: 700; font-size: 0.9rem; cursor: pointer; border: none; text-transform: uppercase; letter-spacing: 1px; transition: all 0.15s; }
+.btn-buy { background: rgba(0,204,0,0.2); color: var(--success); border: 1px solid var(--success); }
+.btn-buy:hover { background: rgba(0,204,0,0.35); }
+.btn-sell { background: rgba(255,51,51,0.2); color: var(--danger); border: 1px solid var(--danger); }
+.btn-sell:hover { background: rgba(255,51,51,0.35); }
+.btn-buy:disabled, .btn-sell:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Positions Table */
+.pos-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.pos-table th { text-align: left; color: var(--text-header); font-size: 0.7rem; padding: 4px 6px; border-bottom: 1px solid #333; text-transform: uppercase; }
+.pos-table td { padding: 5px 6px; border-bottom: 1px solid #111; }
+.pos-table tr:hover td { background: #111; }
+
+/* Right Panel - Trade History */
+.history-item { padding: 6px 4px; border-bottom: 1px solid #111; font-size: 0.75rem; display: grid; grid-template-columns: auto 1fr auto; gap: 6px; align-items: center; }
+.history-action { font-weight: 700; padding: 1px 5px; font-size: 0.7rem; }
+.history-action.buy { color: var(--success); }
+.history-action.sell { color: var(--danger); }
+.history-time { color: var(--text-muted); font-size: 0.65rem; }
+.history-details { color: var(--text-secondary); }
+
+/* Toast Notification */
+.toast { position: fixed; top: 60px; right: 20px; padding: 12px 20px; font-family: monospace; font-size: 0.85rem; z-index: 9999; border: 1px solid; animation: slideIn 0.3s ease, fadeOut 0.5s ease 2.5s; opacity: 1; }
+.toast.success { background: rgba(0,204,0,0.15); color: var(--success); border-color: var(--success); }
+.toast.error { background: rgba(255,51,51,0.15); color: var(--danger); border-color: var(--danger); }
+@keyframes slideIn { from { transform: translateX(100px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; } }
+
+/* Bottom Bar */
+.bottom-bar { grid-column: 1 / -1; background: #000; padding: 6px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 0.7rem; color: var(--text-muted); border-top: 1px solid #333; }
+
+/* Reset Button */
+.btn-reset { background: transparent; border: 1px solid #333; color: var(--text-muted); padding: 3px 8px; font-family: monospace; font-size: 0.65rem; cursor: pointer; text-transform: uppercase; }
+.btn-reset:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Quick qty buttons */
+.qty-presets { display: flex; gap: 4px; grid-column: 1 / -1; }
+.qty-preset { background: #111; border: 1px solid #222; color: var(--text-secondary); padding: 3px 8px; font-family: monospace; font-size: 0.7rem; cursor: pointer; flex: 1; text-align: center; }
+.qty-preset:hover { border-color: var(--text-header); color: var(--text-header); }
+
+/* Scrollbar */
+.panel::-webkit-scrollbar { width: 4px; }
+.panel::-webkit-scrollbar-thumb { background: #333; }
+.panel::-webkit-scrollbar-track { background: #000; }
+
+/* Responsive */
+@media (max-width: 1024px) { .terminal-grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto auto auto; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Stats Bar -->
+<div class="terminal-grid" id="terminalGrid">
+    <div class="stats-bar">
+        <div class="stat-cell">
+            <div class="stat-label">Portfolio Value</div>
+            <div class="stat-value" id="statPortfolioValue">₹{{ "{:,.2f}".format(portfolio.portfolio_value) }}</div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-label">Cash Available</div>
+            <div class="stat-value" id="statCash" style="color: var(--accent-blue);">₹{{ "{:,.2f}".format(portfolio.cash) }}</div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-label">Invested</div>
+            <div class="stat-value" style="color: var(--text-primary);" id="statInvested">₹{{ "{:,.2f}".format(portfolio.total_invested) }}</div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-label">Total P&L</div>
+            <div class="stat-value {{ 'positive' if portfolio.total_pnl >= 0 else 'negative' }}" id="statPnl">
+                {{ "+" if portfolio.total_pnl >= 0 else "" }}₹{{ "{:,.2f}".format(portfolio.total_pnl) }}
+            </div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-label">Return</div>
+            <div class="stat-value {{ 'positive' if portfolio.total_pnl_pct >= 0 else 'negative' }}" id="statReturn">
+                {{ "+" if portfolio.total_pnl_pct >= 0 else "" }}{{ "{:.2f}".format(portfolio.total_pnl_pct) }}%
+            </div>
+        </div>
+        <div class="stat-cell">
+            <div class="stat-label">Trades</div>
+            <div class="stat-value" style="color: var(--accent-purple);" id="statTrades">{{ portfolio.trade_count }}</div>
+        </div>
+    </div>
+
+    <!-- Left: Stock List -->
+    <div class="panel" id="stockListPanel" style="max-height: 600px;">
+        <div class="panel-header">
+            <span>Market Watch</span>
+            <span style="color: var(--success);">● {{ stocks|length }}</span>
+        </div>
+        <input type="text" class="stock-search" id="stockSearch" placeholder="Search ticker..." autocomplete="off">
+        <div id="stockList">
+            {% for stock in stocks %}
+            <div class="stock-item" data-ticker="{{ stock.ticker }}" data-price="{{ stock.price }}" data-signal="{{ stock.signal }}" data-market="{{ stock.market }}" onclick="selectStock(this)">
+                <span class="stock-ticker">{{ stock.ticker.split('.')[0] }}</span>
+                <span class="stock-price">₹{{ "{:,.2f}".format(stock.price) }}</span>
+                <span class="stock-signal {% if 'BUY' in stock.signal %}text-success{% elif 'SELL' in stock.signal %}text-danger{% elif 'CAUTION' in stock.signal %}text-warning{% else %}text-muted{% endif %}">{{ stock.signal }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Center: Trade Form + Positions -->
+    <div class="trade-panel">
+        <div class="trade-form-area">
+            <div class="panel-header"><span>Order Entry</span><span id="orderMarket" style="color: var(--accent-blue);"></span></div>
+            <div class="selected-stock-display" id="selectedDisplay">
+                <span class="selected-stock-name" id="selectedTicker">Select a stock →</span>
+                <span class="selected-stock-price" id="selectedPrice">—</span>
+            </div>
+            <div class="trade-form">
+                <div>
+                    <div class="trade-label">Quantity</div>
+                    <input type="number" class="trade-input" id="tradeQty" min="1" value="1" oninput="updateCost()">
+                </div>
+                <div>
+                    <div class="trade-label">Est. Price</div>
+                    <input type="text" class="trade-input" id="tradePrice" readonly style="color: var(--text-muted);">
+                </div>
+                <div class="qty-presets">
+                    <button class="qty-preset" onclick="setQty(1)">1</button>
+                    <button class="qty-preset" onclick="setQty(5)">5</button>
+                    <button class="qty-preset" onclick="setQty(10)">10</button>
+                    <button class="qty-preset" onclick="setQty(25)">25</button>
+                    <button class="qty-preset" onclick="setQty(50)">50</button>
+                    <button class="qty-preset" onclick="setQty(100)">100</button>
+                </div>
+                <div class="trade-cost" id="tradeCost">Total: ₹0.00</div>
+                <button class="btn-buy" id="btnBuy" disabled onclick="placeTrade('BUY')">▲ Buy</button>
+                <button class="btn-sell" id="btnSell" disabled onclick="placeTrade('SELL')">▼ Sell</button>
+            </div>
+        </div>
+
+        <!-- Positions -->
+        <div class="positions-area">
+            <div class="panel-header"><span>Open Positions</span><span id="posCount" style="color: var(--text-secondary);">{{ portfolio.positions|length }}</span></div>
+            <div id="positionsTable">
+                {% if portfolio.positions %}
+                <table class="pos-table">
+                    <thead><tr><th>Ticker</th><th>Qty</th><th>Avg</th><th>LTP</th><th>P&L</th><th>%</th></tr></thead>
+                    <tbody>
+                    {% for p in portfolio.positions %}
+                    <tr onclick="selectStockByTicker('{{ p.ticker }}')" style="cursor:pointer;">
+                        <td style="color: var(--accent-blue); font-weight: 700;">{{ p.ticker.split('.')[0] }}</td>
+                        <td>{{ p.qty }}</td>
+                        <td>₹{{ "{:,.2f}".format(p.avg_price) }}</td>
+                        <td>₹{{ "{:,.2f}".format(p.current_price) }}</td>
+                        <td class="{{ 'text-success' if p.pnl >= 0 else 'text-danger' }}">{{ "+" if p.pnl >= 0 else "" }}₹{{ "{:,.2f}".format(p.pnl) }}</td>
+                        <td class="{{ 'text-success' if p.pnl_pct >= 0 else 'text-danger' }}">{{ "+" if p.pnl_pct >= 0 else "" }}{{ "{:.2f}".format(p.pnl_pct) }}%</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div style="text-align:center; color:var(--text-muted); padding: 40px 0; font-size:0.8rem;">No open positions. Select a stock and place a trade.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Trade History -->
+    <div class="panel" id="historyPanel" style="max-height: 600px;">
+        <div class="panel-header">
+            <span>Trade Log</span>
+            <button class="btn-reset" onclick="resetPortfolio()">Reset All</button>
+        </div>
+        <div id="tradeHistory">
+            <div style="text-align:center; color:var(--text-muted); padding:20px 0; font-size:0.75rem;">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Bottom Bar -->
+    <div class="bottom-bar">
+        <span>PAPER TRADING TERMINAL v1.0 — Simulated Orders Only</span>
+        <span>Started: {{ portfolio.created_at }} | Capital: ₹10,00,000</span>
+        <span style="color: var(--success);">● SYSTEM OPERATIONAL</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTicker = null;
+let currentPrice = 0;
+
+// Select stock from list
+function selectStock(el) {
+    document.querySelectorAll('.stock-item').forEach(i => i.classList.remove('selected'));
+    el.classList.add('selected');
+    currentTicker = el.dataset.ticker;
+    currentPrice = parseFloat(el.dataset.price);
+    document.getElementById('selectedTicker').textContent = currentTicker;
+    document.getElementById('selectedPrice').textContent = '₹' + currentPrice.toLocaleString('en-IN', {minimumFractionDigits: 2});
+    document.getElementById('tradePrice').value = '₹' + currentPrice.toFixed(2);
+    document.getElementById('orderMarket').textContent = el.dataset.market;
+    document.getElementById('btnBuy').disabled = false;
+    document.getElementById('btnSell').disabled = false;
+    updateCost();
+}
+
+function selectStockByTicker(ticker) {
+    const el = document.querySelector(`.stock-item[data-ticker="${ticker}"]`);
+    if (el) { selectStock(el); el.scrollIntoView({behavior:'smooth', block:'center'}); }
+}
+
+function setQty(q) { document.getElementById('tradeQty').value = q; updateCost(); }
+
+function updateCost() {
+    const qty = parseInt(document.getElementById('tradeQty').value) || 0;
+    const total = qty * currentPrice;
+    document.getElementById('tradeCost').textContent = 'Total: ₹' + total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+// Place Trade
+async function placeTrade(action) {
+    if (!currentTicker) return;
+    const qty = parseInt(document.getElementById('tradeQty').value);
+    if (qty <= 0) { showToast('Enter a valid quantity', 'error'); return; }
+
+    const btn = action === 'BUY' ? document.getElementById('btnBuy') : document.getElementById('btnSell');
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+
+    try {
+        const res = await fetch('/api/terminal/trade', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ ticker: currentTicker, action: action, qty: qty })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            showToast(data.error, 'error');
+        } else {
+            showToast(`${action} ${qty}x ${currentTicker} @ ₹${data.trade.price}`, 'success');
+            refreshAll();
+        }
+    } catch (e) {
+        showToast('Network error', 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = action === 'BUY' ? '▲ Buy' : '▼ Sell';
+}
+
+// Refresh portfolio data
+async function refreshAll() {
+    try {
+        const [pRes, hRes] = await Promise.all([
+            fetch('/api/terminal/portfolio'),
+            fetch('/api/terminal/history')
+        ]);
+        const portfolio = await pRes.json();
+        const history = await hRes.json();
+
+        // Update stats
+        document.getElementById('statPortfolioValue').textContent = '₹' + portfolio.portfolio_value.toLocaleString('en-IN', {minimumFractionDigits:2});
+        document.getElementById('statCash').textContent = '₹' + portfolio.cash.toLocaleString('en-IN', {minimumFractionDigits:2});
+        document.getElementById('statInvested').textContent = '₹' + portfolio.total_invested.toLocaleString('en-IN', {minimumFractionDigits:2});
+
+        const pnlEl = document.getElementById('statPnl');
+        pnlEl.textContent = (portfolio.total_pnl >= 0 ? '+' : '') + '₹' + portfolio.total_pnl.toLocaleString('en-IN', {minimumFractionDigits:2});
+        pnlEl.className = 'stat-value ' + (portfolio.total_pnl >= 0 ? 'positive' : 'negative');
+
+        const retEl = document.getElementById('statReturn');
+        retEl.textContent = (portfolio.total_pnl_pct >= 0 ? '+' : '') + portfolio.total_pnl_pct.toFixed(2) + '%';
+        retEl.className = 'stat-value ' + (portfolio.total_pnl_pct >= 0 ? 'positive' : 'negative');
+
+        document.getElementById('statTrades').textContent = portfolio.trade_count;
+
+        // Update positions
+        document.getElementById('posCount').textContent = portfolio.positions.length;
+        if (portfolio.positions.length > 0) {
+            let html = '<table class="pos-table"><thead><tr><th>Ticker</th><th>Qty</th><th>Avg</th><th>LTP</th><th>P&L</th><th>%</th></tr></thead><tbody>';
+            portfolio.positions.forEach(p => {
+                const cls = p.pnl >= 0 ? 'text-success' : 'text-danger';
+                const sign = p.pnl >= 0 ? '+' : '';
+                html += `<tr onclick="selectStockByTicker('${p.ticker}')" style="cursor:pointer;">
+                    <td style="color:var(--accent-blue);font-weight:700;">${p.ticker.split('.')[0]}</td>
+                    <td>${p.qty}</td><td>₹${p.avg_price.toFixed(2)}</td><td>₹${p.current_price.toFixed(2)}</td>
+                    <td class="${cls}">${sign}₹${p.pnl.toFixed(2)}</td><td class="${cls}">${sign}${p.pnl_pct.toFixed(2)}%</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('positionsTable').innerHTML = html;
+        } else {
+            document.getElementById('positionsTable').innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:0.8rem;">No open positions.</div>';
+        }
+
+        // Update history
+        renderHistory(history.trades);
+    } catch (e) { console.error(e); }
+}
+
+function renderHistory(trades) {
+    const container = document.getElementById('tradeHistory');
+    if (!trades || trades.length === 0) {
+        container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px 0;font-size:0.75rem;">No trades yet.</div>';
+        return;
+    }
+    let html = '';
+    trades.forEach(t => {
+        const cls = t.action === 'BUY' ? 'buy' : 'sell';
+        html += `<div class="history-item">
+            <span class="history-action ${cls}">${t.action}</span>
+            <span class="history-details">${t.qty}x ${t.ticker.split('.')[0]} @ ₹${t.price.toFixed(2)}</span>
+            <span class="history-time">${t.timestamp.split(' ')[1] || t.timestamp}</span>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+// Reset
+async function resetPortfolio() {
+    if (!confirm('Reset portfolio? All positions and history will be cleared.')) return;
+    await fetch('/api/terminal/reset', { method: 'POST' });
+    showToast('Portfolio reset to ₹10,00,000', 'success');
+    setTimeout(() => location.reload(), 500);
+}
+
+// Search
+document.getElementById('stockSearch').addEventListener('input', function() {
+    const q = this.value.toUpperCase();
+    document.querySelectorAll('.stock-item').forEach(item => {
+        item.style.display = item.dataset.ticker.toUpperCase().includes(q) ? 'grid' : 'none';
+    });
+});
+
+// Toast
+function showToast(msg, type) {
+    const t = document.createElement('div');
+    t.className = 'toast ' + type;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
+
+// Load history on page load
+document.addEventListener('DOMContentLoaded', async () => {
+    try {
+        const res = await fetch('/api/terminal/history');
+        const data = await res.json();
+        renderHistory(data.trades);
+    } catch (e) { console.error(e); }
+});
+</script>
+{% endblock %}

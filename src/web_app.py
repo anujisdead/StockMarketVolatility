@@ -194,6 +194,43 @@ def export_report(ticker):
     except Exception as e:
         return str(e), 500
 
+from paper_trader import (
+    get_portfolio_summary, get_trade_history, execute_trade,
+    reset_portfolio, get_available_stocks
+)
+
+@app.route('/terminal')
+def paper_terminal():
+    """Render the Bloomberg-style paper trading terminal."""
+    portfolio = get_portfolio_summary()
+    stocks = get_available_stocks()
+    return render_template('terminal.html', portfolio=portfolio, stocks=stocks)
+
+@app.route('/api/terminal/portfolio')
+def api_portfolio():
+    return jsonify(get_portfolio_summary())
+
+@app.route('/api/terminal/history')
+def api_trade_history():
+    return jsonify({'trades': get_trade_history()})
+
+@app.route('/api/terminal/trade', methods=['POST'])
+def api_execute_trade():
+    data = request.get_json()
+    ticker = data.get('ticker', '')
+    action = data.get('action', '').upper()
+    qty = data.get('qty', 0)
+    result = execute_trade(ticker, action, qty)
+    return jsonify(result)
+
+@app.route('/api/terminal/reset', methods=['POST'])
+def api_reset_portfolio():
+    return jsonify(reset_portfolio())
+
+@app.route('/api/terminal/stocks')
+def api_available_stocks():
+    return jsonify({'stocks': get_available_stocks()})
+
 import redis
 import threading
 
