@@ -9,3 +9,8 @@ scipy
 flask
 Flask-APScheduler
 feedparser
+eventlet
+flask-socketio
+redis
+markdown
+Flask-WeasyPrint
