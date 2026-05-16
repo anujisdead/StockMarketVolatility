@@ -233,7 +233,8 @@ def api_screener():
                 
         elif screen_type == 'intraday':
             # Load from Redis Snapshot
-            r = redis.Redis(host='localhost', port=6379, db=0)
+            redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+            r = redis.from_url(redis_url)
             snapshot = r.hgetall('intraday_snapshot')
             
             for ticker_bytes, data_bytes in snapshot.items():
@@ -261,7 +262,8 @@ def api_screener():
 
 def redis_listener():
     """Background thread to listen for Redis updates and emit to WebSockets."""
-    r = redis.Redis(host='localhost', port=6379, db=0)
+    redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+    r = redis.from_url(redis_url)
     p = r.pubsub()
     p.subscribe('price_feed', 'volatility_feed')
     
@@ -286,6 +288,7 @@ if __name__ == '__main__':
     # Start Redis Listener
     socketio.start_background_task(redis_listener)
     
-    port = 5002
-    print(f"Starting server on http://localhost:{port}")
-    socketio.run(app, host='0.0.0.0', port=port, debug=True, use_reloader=False)
+    port = int(os.environ.get('PORT', 5002))
+    debug_mode = os.environ.get('RENDER') is None # Disable debug on Render
+    print(f"Starting server on http://0.0.0.0:{port}")
+    socketio.run(app, host='0.0.0.0', port=port, debug=debug_mode, use_reloader=False)
