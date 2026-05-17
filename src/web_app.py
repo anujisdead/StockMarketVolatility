@@ -132,7 +132,8 @@ def optimize_portfolio():
     result = get_portfolio_optimization(tickers)
     return jsonify(result)
 
-from flask_weasyprint import HTML, render_pdf
+from xhtml2pdf import pisa
+from io import BytesIO
 from datetime import datetime
 
 @app.route('/api/export/<ticker>')
@@ -147,7 +148,6 @@ def export_report(ticker):
         if os.path.exists(summary_path):
             with open(summary_path, 'r') as f:
                 data = json.load(f)
-                # Find the specific stock
                 for s in data.get('results', []):
                     if s['ticker'] == ticker:
                         stock_summary = s
@@ -161,7 +161,6 @@ def export_report(ticker):
         if os.path.exists(filepath):
             with open(filepath, 'r') as f:
                 history = json.load(f)
-                # Merge history into summary
                 stock_summary.update(history)
                 
         # Ensure prices exist for the table
@@ -178,7 +177,7 @@ def export_report(ticker):
         # Calculate returns if missing
         if 'returns' not in stock_summary or not stock_summary['returns']:
             prices = stock_summary.get('prices', [])
-            returns = [0.0] # First day 0 return
+            returns = [0.0]
             for i in range(1, len(prices)):
                 if prices[i-1] != 0:
                     ret = (prices[i] - prices[i-1]) / prices[i-1]
@@ -187,9 +186,17 @@ def export_report(ticker):
                     returns.append(0.0)
             stock_summary['returns'] = returns
         
-        # Render PDF
+        # Render HTML then convert to PDF with xhtml2pdf (pure Python, no system deps)
         html = render_template('report_template.html', stock=stock_summary, date=datetime.now().strftime('%Y-%m-%d %H:%M'))
-        return render_pdf(HTML(string=html, base_url=request.base_url), download_filename=f'{ticker}_Report.pdf')
+        pdf_buffer = BytesIO()
+        pisa_status = pisa.CreatePDF(html, dest=pdf_buffer)
+        
+        if pisa_status.err:
+            return "PDF generation failed", 500
+        
+        pdf_buffer.seek(0)
+        from flask import send_file
+        return send_file(pdf_buffer, mimetype='application/pdf', as_attachment=True, download_name=f'{ticker}_Report.pdf')
         
     except Exception as e:
         return str(e), 500

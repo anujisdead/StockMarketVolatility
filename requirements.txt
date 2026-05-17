@@ -14,4 +14,4 @@ gevent-websocket
 flask-socketio
 redis
 markdown
-Flask-WeasyPrint
+xhtml2pdf
